@@ -217,6 +217,28 @@ class ArgumentDialog(QtWidgets.QDialog):
             float: DoubleSpinBoxWidget
         }
 
+        # ------------------------------------------------------------------------
+        # get doc string as tooltip for the widget
+        param_tool_tips = {}
+        func_doc_string = inspect.getdoc(self.func)  # god I love python sometimes
+        if func_doc_string:
+            for doc_line in func_doc_string.splitlines():
+                try:
+                    if ":param " not in doc_line:  # this is not very safe
+                        continue
+                    param_doc_split = doc_line.lstrip(":param ").split(":")  # neither ís this, split arg name / arg doc
+                    if len(param_doc_split) == 1:
+                        continue
+                    if not param_doc_split[1]:  # if doc string is blank, don't add it to dict
+                        continue
+
+                    param_tool_tips[param_doc_split[0]] = param_doc_split[1]
+
+                except Exception as e:
+                    print(e)
+
+        # ----------------------------------------------------------
+        # iterate through function arguments
         sig = inspect.signature(self.func)
         for param in sig.parameters.values():  # type: inspect.Parameter
 
@@ -249,6 +271,9 @@ class ArgumentDialog(QtWidgets.QDialog):
                                                      is_required=not has_default_value)  # type:ArgumentWidget
                 arg_widget_instance.value_modified.connect(self.preview_func_call)
                 arg_layout.addWidget(arg_widget_instance)
+
+                param_tool_tip = param_tool_tips.get(param.name, "parameter un-documented")
+                arg_widget_instance.setToolTip(param_tool_tip)
 
                 self.generated_arg_widgets.append(arg_widget_instance)
             else:
@@ -302,7 +327,25 @@ def test_function(file_name="", file_path="",
                   user_attributes=False, keyable_attributes=False, locked_attributes=False,
                   skip_attrs=None,
                   kwarg1=True, testing_very_loooooooooooong_argument_name="Testing"):
+    """
+
+    Doc strings in this format will be read and added as tooltips to the widgets
+
+    :param file_name: example doc string used in tooltip
+    :param file_path:
+    :param transforms:
+    :param shapes:
+    :param attributes:
+    :param connections:
+    :param user_attributes:
+    :param keyable_attributes:
+    :param locked_attributes:
+    :param skip_attrs:
+    :param kwarg1:
+    :param testing_very_loooooooooooong_argument_name:
+    """
     print(file_name)
+    print(file_path)
 
 
 def main(func, argument_widgets=None, empty_default_type=str):
