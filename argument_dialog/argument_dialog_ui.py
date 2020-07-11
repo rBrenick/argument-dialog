@@ -1,9 +1,10 @@
-import sys
 import inspect
+import sys
+
 from Qt import QtCore, QtWidgets, QtGui
 
-class ArgumentWidget(QtWidgets.QWidget):
 
+class ArgumentWidget(QtWidgets.QWidget):
     value_modified = QtCore.Signal()
 
     def __init__(self, name, default_value, is_required=False, parent=None):
@@ -21,7 +22,7 @@ class ArgumentWidget(QtWidgets.QWidget):
         self.build_widget()
 
         if is_required:
-            self.mark_as_required() # has no real Default value, needs input from user.
+            self.mark_as_required()  # has no real Default value, needs input from user.
 
         self.setLayout(self.main_layout)
 
@@ -38,7 +39,7 @@ class ArgumentWidget(QtWidgets.QWidget):
         if has_value:
             self.setStyleSheet("")
         else:
-            self.setStyleSheet("background-color:rgb(200, 150, 80)") # orange-ish tone
+            self.setStyleSheet("background-color:rgb(200, 150, 80)")  # orange-ish tone
 
     def mark_as_modified(self):
         self.was_modified = True
@@ -58,7 +59,6 @@ class ArgumentWidget(QtWidgets.QWidget):
 
 
 class BoolCheckBoxWidget(ArgumentWidget):
-
     def build_widget(self):
         self.check_box = QtWidgets.QCheckBox()
         self.check_box.setChecked(self.default_value)
@@ -73,7 +73,6 @@ class BoolCheckBoxWidget(ArgumentWidget):
 
 
 class DoubleSpinBoxWidget(ArgumentWidget):
-
     def build_widget(self):
         self.spin_box = QtWidgets.QDoubleSpinBox()
         self.spin_box.setValue(self.default_value)
@@ -92,6 +91,7 @@ class StringTextEditWidget(ArgumentWidget):
     TextEdit is a real pain for widget height. Currently not in use.
     TODO: Maybe swap out the LineEdit for this class when attempting to enter new line, or pasting multi-line strings.
     """
+
     def build_widget(self):
         self.text_edit = QtWidgets.QTextEdit()
         self.text_edit.setText(self.default_value)
@@ -105,6 +105,8 @@ class StringTextEditWidget(ArgumentWidget):
 
     def get_argument_value(self):
         return self.text_edit.toPlainText()
+
+
 """
     def sizeHint(self):
         doc_size = self.text_edit.document().size()
@@ -136,7 +138,6 @@ class StringLineEditWidget(ArgumentWidget):
 
 
 class ArgumentDialog(QtWidgets.QDialog):
-
     def __init__(self, func, empty_default_type=str, parent=None):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
@@ -234,7 +235,7 @@ class ArgumentDialog(QtWidgets.QDialog):
     def preview_func_call(self):
         args, kwargs = self.get_modified_values()
         func_string = "{}(".format(self.func.__name__)
-        empty_spaces = " "*len(func_string)
+        empty_spaces = " " * len(func_string)
         func_string += ",\n{}".format(empty_spaces).join(args)
 
         kwarg_length = len(kwargs)
@@ -247,7 +248,7 @@ class ArgumentDialog(QtWidgets.QDialog):
             else:
                 func_string += "{}={}".format(k, v)
 
-            if kwarg_length > 1 and i != kwarg_length-1:
+            if kwarg_length > 1 and i != kwarg_length - 1:
                 func_string += ",\n{}".format(empty_spaces)
 
         if len(args) > 1 or kwarg_length > 1:
@@ -263,9 +264,9 @@ class ArgumentDialog(QtWidgets.QDialog):
 
 def test_function(file_name="", file_path="",
                   transforms=False, shapes=False, attributes=False, connections=False,
-                user_attributes=False, keyable_attributes=False, locked_attributes=False,
-                skip_attrs=None,
-                kwarg1=True, testing_very_loooooooooooong_argument_name="Testing"):
+                  user_attributes=False, keyable_attributes=False, locked_attributes=False,
+                  skip_attrs=None,
+                  kwarg1=True, testing_very_loooooooooooong_argument_name="Testing"):
     print(file_name)
 
 
@@ -274,11 +275,8 @@ def main(func):
     arg_dialog.show()
     return arg_dialog
 
+
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     dialog = main(test_function)
     sys.exit(app.exec_())
-
-
-
-
