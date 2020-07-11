@@ -19,15 +19,26 @@ class ArgumentWidget(QtWidgets.QWidget):
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.argument_context_menu)
 
-        self.build_widget()
+        arg_widgets = self.build_widget()
+        if not isinstance(arg_widgets, (list, tuple)):
+            arg_widgets = (arg_widgets, )
+
+        for arg_widget in arg_widgets:
+            arg_widget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            arg_widget.customContextMenuRequested.connect(self.argument_context_menu)
 
         if is_required:
             self.mark_as_required()  # has no real Default value, needs input from user.
 
         self.setLayout(self.main_layout)
 
+    def argument_context_menu(self, position):
+        menu = QtWidgets.QMenu(self)
+        menu.addAction("Reset Value", self.set_value_to_default)
+        menu.exec_(self.mapToGlobal(position))
+
     def build_widget(self):
-        return
+        return ()
 
     def get_argument_value(self):
         return
@@ -46,16 +57,13 @@ class ArgumentWidget(QtWidgets.QWidget):
         self.value_modified.emit()
         if self.is_required:
             self.mark_as_required(has_value=True)
-
-    def argument_context_menu(self, position):
-        menu = QtWidgets.QMenu(self)
-        menu.addAction("Reset Value", self.set_value_to_default)
-        menu.exec_(self.mapToGlobal(position))
+        self.setStyleSheet("background-color:rgb(150, 200, 150)")  # green-ish tone
 
     def set_value_to_default(self):
         self.set_value(self.default_value)
         self.was_modified = False
         self.value_modified.emit()
+        self.setStyleSheet("")  # reset
 
 
 class BoolCheckBoxWidget(ArgumentWidget):
@@ -64,6 +72,7 @@ class BoolCheckBoxWidget(ArgumentWidget):
         self.check_box.setChecked(self.default_value)
         self.main_layout.addWidget(self.check_box)
         self.check_box.stateChanged.connect(self.mark_as_modified)
+        return self.check_box
 
     def set_value(self, val):
         self.check_box.setChecked(val)
@@ -78,6 +87,7 @@ class DoubleSpinBoxWidget(ArgumentWidget):
         self.spin_box.setValue(self.default_value)
         self.main_layout.addWidget(self.spin_box)
         self.spin_box.valueChanged.connect(self.mark_as_modified)
+        return self.spin_box
 
     def set_value(self, val):
         self.spin_box.setValue(val)
@@ -98,7 +108,7 @@ class StringTextEditWidget(ArgumentWidget):
         self.main_layout.addWidget(self.text_edit)
         self.text_edit.textChanged.connect(self.mark_as_modified)
         self.text_edit.setMinimumHeight(0)
-        # self.text_edit.textChanged.connect(self.updateGeometry)
+        return self.text_edit
 
     def set_value(self, val):
         self.text_edit.setText(val)
@@ -125,6 +135,7 @@ class StringLineEditWidget(ArgumentWidget):
         self.line_edit.setText(self.default_value)
         self.main_layout.addWidget(self.line_edit)
         self.line_edit.textEdited.connect(self.mark_as_modified)
+        return self.line_edit
 
     def set_value(self, val):
         self.line_edit.setText(val)
@@ -137,14 +148,30 @@ class StringLineEditWidget(ArgumentWidget):
         self.line_edit.setPlaceholderText("REQUIRED")
 
 
+class StringFilePathWidget(StringLineEditWidget):
+    def build_widget(self):
+        parent_widget = super(StringFilePathWidget, self).build_widget()
+        browse_file_button = QtWidgets.QPushButton()
+        browse_file_button.setIcon(self.style().standardIcon(getattr(QtWidgets.QStyle, "SP_DialogOpenButton")))
+        browse_file_button.clicked.connect(self.browse_file_path)
+        self.main_layout.addWidget(browse_file_button)
+        return parent_widget, browse_file_button
+
+    def browse_file_path(self):
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Browse File")
+        self.set_value(file_path)
+        self.mark_as_modified()
+
+
 class ArgumentDialog(QtWidgets.QDialog):
-    def __init__(self, func, empty_default_type=str, parent=None):
+    def __init__(self, func, argument_types=None, empty_default_type=str, parent=None):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
 
         self.func = func
         self.empty_default_type = empty_default_type
         self.arg_widgets = []
+        self.argument_types = argument_types if argument_types else {}
 
         self.main_layout = QtWidgets.QVBoxLayout()
 
@@ -192,13 +219,6 @@ class ArgumentDialog(QtWidgets.QDialog):
 
         sig = inspect.signature(self.func)
         for param in sig.parameters.values():  # type: inspect.Parameter
-            default_value = param.default
-
-            has_default_value = default_value != inspect.Parameter.empty
-            if not has_default_value:
-                default_value = self.empty_default_type()
-
-            param_type = type(default_value)
 
             arg_layout = QtWidgets.QHBoxLayout()
             arg_layout.setContentsMargins(0, 0, 0, 0)
@@ -208,8 +228,23 @@ class ArgumentDialog(QtWidgets.QDialog):
             arg_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
             arg_layout.addWidget(arg_label)
 
-            arg_widget_cls = type_widgets.get(param_type)
+            # ------------------------------------------------------------------------
+            default_value = param.default
+            has_default_value = default_value != inspect.Parameter.empty
+            if not has_default_value:
+                default_value = self.empty_default_type() if self.empty_default_type else None
+
+            param_type = None
+            arg_widget_cls = self.argument_types.get(param.name)  # QT Class can be specified in main() arguments
+
+            if not arg_widget_cls:
+                #  Try to find matching QT Widget from value type()
+                param_type = type(default_value)
+                arg_widget_cls = type_widgets.get(param_type)
+
+            # ------------------------------------------------------------------------
             if arg_widget_cls:
+                # Create QT Widget instance for this value type
                 arg_widget_instance = arg_widget_cls(param.name, default_value,
                                                      is_required=not has_default_value)  # type:ArgumentWidget
                 arg_widget_instance.value_modified.connect(self.preview_func_call)
@@ -217,7 +252,7 @@ class ArgumentDialog(QtWidgets.QDialog):
 
                 self.arg_widgets.append(arg_widget_instance)
             else:
-                no_widget_label = QtWidgets.QLabel("No Widget Found for type: {}".format(param_type.__name__))
+                no_widget_label = QtWidgets.QLabel("No Widget Found for argument: {}".format(param_type.__name__))
                 arg_layout.addWidget(no_widget_label)
 
             self.arguments_layout.addLayout(arg_layout)
@@ -226,7 +261,7 @@ class ArgumentDialog(QtWidgets.QDialog):
         args = []
         kwargs = {}
         for widget in self.arg_widgets:  # type: ArgumentWidget
-            if not widget.was_modified:  # leave defaults as it
+            if not widget.was_modified:  # leave defaults as is
                 continue
             kwargs[widget.name] = widget.get_argument_value()
 
@@ -270,13 +305,13 @@ def test_function(file_name="", file_path="",
     print(file_name)
 
 
-def main(func, empty_default_type=str):
-    arg_dialog = ArgumentDialog(func, empty_default_type=empty_default_type)
+def main(func, argument_types=None, empty_default_type=str):
+    arg_dialog = ArgumentDialog(func, argument_types=argument_types, empty_default_type=empty_default_type)
     arg_dialog.show()
     return arg_dialog
 
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
-    dialog = main(test_function)
+    dialog = main(test_function, argument_types={"file_path": StringFilePathWidget})
     sys.exit(app.exec_())
