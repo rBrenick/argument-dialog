@@ -270,8 +270,8 @@ def test_function(file_name="", file_path="",
     print(file_name)
 
 
-def main(func):
-    arg_dialog = ArgumentDialog(func)
+def main(func, empty_default_type=str):
+    arg_dialog = ArgumentDialog(func, empty_default_type=empty_default_type)
     arg_dialog.show()
     return arg_dialog
 
