@@ -164,14 +164,14 @@ class StringFilePathWidget(StringLineEditWidget):
 
 
 class ArgumentDialog(QtWidgets.QDialog):
-    def __init__(self, func, argument_types=None, empty_default_type=str, parent=None):
+    def __init__(self, func, argument_widgets=None, empty_default_type=str, parent=None):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
 
         self.func = func
         self.empty_default_type = empty_default_type
-        self.arg_widgets = []
-        self.argument_types = argument_types if argument_types else {}
+        self.input_arg_widget_dict = argument_widgets if argument_widgets else {}
+        self.generated_arg_widgets = []
 
         self.main_layout = QtWidgets.QVBoxLayout()
 
@@ -235,7 +235,7 @@ class ArgumentDialog(QtWidgets.QDialog):
                 default_value = self.empty_default_type() if self.empty_default_type else None
 
             param_type = None
-            arg_widget_cls = self.argument_types.get(param.name)  # QT Class can be specified in main() arguments
+            arg_widget_cls = self.input_arg_widget_dict.get(param.name)  # QT Class can be specified in main() arguments
 
             if not arg_widget_cls:
                 #  Try to find matching QT Widget from value type()
@@ -250,7 +250,7 @@ class ArgumentDialog(QtWidgets.QDialog):
                 arg_widget_instance.value_modified.connect(self.preview_func_call)
                 arg_layout.addWidget(arg_widget_instance)
 
-                self.arg_widgets.append(arg_widget_instance)
+                self.generated_arg_widgets.append(arg_widget_instance)
             else:
                 no_widget_label = QtWidgets.QLabel("No Widget Found for argument: {}".format(param_type.__name__))
                 arg_layout.addWidget(no_widget_label)
@@ -260,7 +260,7 @@ class ArgumentDialog(QtWidgets.QDialog):
     def get_modified_values(self):
         args = []
         kwargs = {}
-        for widget in self.arg_widgets:  # type: ArgumentWidget
+        for widget in self.generated_arg_widgets:  # type: ArgumentWidget
             if not widget.was_modified:  # leave defaults as is
                 continue
             kwargs[widget.name] = widget.get_argument_value()
@@ -305,13 +305,13 @@ def test_function(file_name="", file_path="",
     print(file_name)
 
 
-def main(func, argument_types=None, empty_default_type=str):
-    arg_dialog = ArgumentDialog(func, argument_types=argument_types, empty_default_type=empty_default_type)
+def main(func, argument_widgets=None, empty_default_type=str):
+    arg_dialog = ArgumentDialog(func, argument_widgets=argument_widgets, empty_default_type=empty_default_type)
     arg_dialog.show()
     return arg_dialog
 
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
-    dialog = main(test_function, argument_types={"file_path": StringFilePathWidget})
+    dialog = main(test_function, argument_widgets={"file_path": StringFilePathWidget})
     sys.exit(app.exec_())
