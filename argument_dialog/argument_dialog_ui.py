@@ -1,6 +1,7 @@
 import inspect
 import re
 import sys
+import os
 
 from Qt import QtCore, QtWidgets, QtGui
 
@@ -166,6 +167,7 @@ class ArgumentDialog(QtWidgets.QDialog):
     def __init__(self, func, argument_widgets=None, empty_default_type=str, parent=None):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
+        self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), "icons", "argument_dialog_icon.png")))
 
         self.func = func
         self.empty_default_type = empty_default_type
