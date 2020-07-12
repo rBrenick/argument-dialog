@@ -21,7 +21,7 @@ class ArgumentWidget(QtWidgets.QWidget):
 
         arg_widgets = self.build_widget()
         if not isinstance(arg_widgets, (list, tuple)):
-            arg_widgets = (arg_widgets, )
+            arg_widgets = (arg_widgets,)
 
         for arg_widget in arg_widgets:
             arg_widget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -55,15 +55,13 @@ class ArgumentWidget(QtWidgets.QWidget):
     def mark_as_modified(self):
         self.was_modified = True
         self.value_modified.emit()
-        if self.is_required:
-            self.mark_as_required(has_value=True)
         self.setStyleSheet("background-color:rgb(150, 200, 150)")  # green-ish tone
 
     def set_value_to_default(self):
         self.set_value(self.default_value)
         self.was_modified = False
         self.value_modified.emit()
-        self.setStyleSheet("")  # reset
+        self.mark_as_required(has_value=not self.is_required)  # reset background-color
 
 
 class BoolCheckBoxWidget(ArgumentWidget):
@@ -256,12 +254,11 @@ class ArgumentDialog(QtWidgets.QDialog):
             if not has_default_value:
                 default_value = self.empty_default_type() if self.empty_default_type else None
 
-            param_type = None
+            param_type = type(default_value)
             arg_widget_cls = self.input_arg_widget_dict.get(param.name)  # QT Class can be specified in main() arguments
 
             if not arg_widget_cls:
                 #  Try to find matching QT Widget from value type()
-                param_type = type(default_value)
                 arg_widget_cls = type_widgets.get(param_type)
 
             # ------------------------------------------------------------------------
@@ -288,7 +285,11 @@ class ArgumentDialog(QtWidgets.QDialog):
         for widget in self.generated_arg_widgets:  # type: ArgumentWidget
             if not widget.was_modified:  # leave defaults as is
                 continue
-            kwargs[widget.name] = widget.get_argument_value()
+
+            if widget.is_required:
+                args.append(widget.get_argument_value())
+            else:
+                kwargs[widget.name] = widget.get_argument_value()
 
         return args, kwargs
 
@@ -296,22 +297,31 @@ class ArgumentDialog(QtWidgets.QDialog):
         args, kwargs = self.get_modified_values()
         func_string = "{}(".format(self.func.__name__)
         empty_spaces = " " * len(func_string)
-        func_string += ",\n{}".format(empty_spaces).join(args)
 
+        arg_length = len(args)
         kwarg_length = len(kwargs)
 
-        for i, k in enumerate(kwargs.keys()):
-            v = kwargs[k]
-
-            if isinstance(v, str):
-                func_string += "{}='{}'".format(k, v)
+        for i, arg_val in enumerate(args):
+            if isinstance(arg_val, str):
+                func_string += "'{}'".format(arg_val)
             else:
-                func_string += "{}={}".format(k, v)
+                func_string += "{}".format(arg_val)
+
+            if arg_length > 1 and i != arg_length - 1 or kwarg_length:
+                func_string += ",\n{}".format(empty_spaces)
+
+        for i, kwarg_key in enumerate(kwargs.keys()):
+            kwarg_val = kwargs[kwarg_key]
+
+            if isinstance(kwarg_val, str):
+                func_string += "{}='{}'".format(kwarg_key, kwarg_val)
+            else:
+                func_string += "{}={}".format(kwarg_key, kwarg_val)
 
             if kwarg_length > 1 and i != kwarg_length - 1:
                 func_string += ",\n{}".format(empty_spaces)
 
-        if len(args) > 1 or kwarg_length > 1:
+        if arg_length + kwarg_length > 1:
             func_string += "\n{})".format(empty_spaces)
         else:
             func_string += ")"
@@ -322,7 +332,7 @@ class ArgumentDialog(QtWidgets.QDialog):
         self.func(*args, **kwargs)
 
 
-def test_function(file_name="", file_path="",
+def test_function(file_name, file_path,
                   transforms=False, shapes=False, attributes=False, connections=False,
                   user_attributes=False, keyable_attributes=False, locked_attributes=False,
                   skip_attrs=None,
