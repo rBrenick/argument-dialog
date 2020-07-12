@@ -1,4 +1,5 @@
 import inspect
+import re
 import sys
 
 from Qt import QtCore, QtWidgets, QtGui
@@ -206,18 +207,20 @@ class ArgumentDialog(QtWidgets.QDialog):
         self.preview_func_call()
 
     def generate_argument_widgets(self):
-        print(self.func)
-
         type_widgets = {
-            bool: BoolCheckBoxWidget,
-            str: StringLineEditWidget,
-            int: DoubleSpinBoxWidget,
-            float: DoubleSpinBoxWidget
+            'bool': BoolCheckBoxWidget,
+            'str': StringLineEditWidget,
+            'int': DoubleSpinBoxWidget,
+            'float': DoubleSpinBoxWidget,
+            'path': StringFilePathWidget,
         }
 
         # ------------------------------------------------------------------------
         # get doc string as tooltip for the widget
         param_tool_tips = {}
+        param_doc_string_types = {}
+        type_regex_pattern = re.compile('<(.*)>', re.IGNORECASE)
+
         func_doc_string = inspect.getdoc(self.func)  # god I love python sometimes
         if func_doc_string:
             for doc_line in func_doc_string.splitlines():
@@ -231,6 +234,12 @@ class ArgumentDialog(QtWidgets.QDialog):
                         continue
 
                     param_tool_tips[param_doc_split[0]] = param_doc_split[1]
+
+                    # Extract type from doc string if possible
+                    type_doc_part = param_doc_split[1]
+                    type_regex_search_result = type_regex_pattern.search(type_doc_part)
+                    if type_regex_search_result:
+                        param_doc_string_types[param_doc_split[0]] = type_regex_search_result.group(1)
 
                 except Exception as e:
                     print(e)
@@ -257,9 +266,14 @@ class ArgumentDialog(QtWidgets.QDialog):
             param_type = type(default_value)
             arg_widget_cls = self.input_arg_widget_dict.get(param.name)  # QT Class can be specified in main() arguments
 
-            if not arg_widget_cls:
-                #  Try to find matching QT Widget from value type()
-                arg_widget_cls = type_widgets.get(param_type)
+            if arg_widget_cls is None:
+                doc_string_type = param_doc_string_types.get(param.name)
+                if doc_string_type:  # Try to find matching QT Widget from doc string type
+                    arg_widget_cls = type_widgets.get(doc_string_type)
+
+            if arg_widget_cls is None:
+                # Try to find matching QT Widget from value type()
+                arg_widget_cls = type_widgets.get(param_type.__name__)
 
             # ------------------------------------------------------------------------
             if arg_widget_cls:
@@ -332,7 +346,7 @@ class ArgumentDialog(QtWidgets.QDialog):
         self.func(*args, **kwargs)
 
 
-def test_function(file_name, file_path,
+def test_function(file_name, file_path="",
                   transforms=False, shapes=False, attributes=False, connections=False,
                   user_attributes=False, keyable_attributes=False, locked_attributes=False,
                   skip_attrs=None,
@@ -342,7 +356,7 @@ def test_function(file_name, file_path,
     Doc strings in this format will be read and added as tooltips to the widgets
 
     :param file_name: example doc string used in tooltip
-    :param file_path:
+    :param file_path: type can also be defined like this <path> if it wants special widgets
     :param transforms:
     :param shapes:
     :param attributes:
@@ -366,5 +380,5 @@ def main(func, argument_widgets=None, empty_default_type=str):
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
-    dialog = main(test_function, argument_widgets={"file_path": StringFilePathWidget})
+    dialog = main(test_function)
     sys.exit(app.exec_())
