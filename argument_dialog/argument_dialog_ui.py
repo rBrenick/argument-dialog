@@ -1,7 +1,7 @@
 import inspect
+import os
 import re
 import sys
-import os
 
 from Qt import QtCore, QtWidgets, QtGui
 
@@ -29,6 +29,9 @@ class ArgumentWidget(QtWidgets.QWidget):
             arg_widget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
             arg_widget.customContextMenuRequested.connect(self.argument_context_menu)
 
+        self.default_style = "background-color:rgb(120, 120, 120); color:white;"
+        self.setStyleSheet(self.default_style)
+
         if is_required:
             self.mark_as_required()  # has no real Default value, needs input from user.
 
@@ -50,14 +53,14 @@ class ArgumentWidget(QtWidgets.QWidget):
 
     def mark_as_required(self, has_value=False):
         if has_value:
-            self.setStyleSheet("")
+            self.setStyleSheet(self.default_style)
         else:
-            self.setStyleSheet("background-color:rgb(200, 150, 80)")  # orange-ish tone
+            self.setStyleSheet("background-color:rgb(250, 200, 100); color:black;")  # orange-ish tone
 
     def mark_as_modified(self):
         self.was_modified = True
         self.value_modified.emit()
-        self.setStyleSheet("background-color:rgb(150, 200, 150)")  # green-ish tone
+        self.setStyleSheet("background-color:rgb(100, 150, 100); color:white;")  # green-ish tone
 
     def set_value_to_default(self):
         self.set_value(self.default_value)
@@ -83,17 +86,29 @@ class BoolCheckBoxWidget(ArgumentWidget):
 
 class DoubleSpinBoxWidget(ArgumentWidget):
     def build_widget(self):
-        self.spin_box = QtWidgets.QDoubleSpinBox()
+        self.spin_box = self.create_spin_widget()
+        self.spin_box.setMinimum(-999999999)
+        self.spin_box.setMaximum(999999999)
         self.spin_box.setValue(self.default_value)
         self.main_layout.addWidget(self.spin_box)
         self.spin_box.valueChanged.connect(self.mark_as_modified)
         return self.spin_box
+
+    def create_spin_widget(self):  # integer spin overloads this
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setDecimals(4)
+        return spin
 
     def set_value(self, val):
         self.spin_box.setValue(val)
 
     def get_argument_value(self):
         return self.spin_box.value()
+
+
+class IntegerSpinBoxWidget(DoubleSpinBoxWidget):
+    def create_spin_widget(self):
+        return QtWidgets.QSpinBox()
 
 
 class StringTextEditWidget(ArgumentWidget):
@@ -159,8 +174,9 @@ class StringFilePathWidget(StringLineEditWidget):
 
     def browse_file_path(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Browse File")
-        self.set_value(file_path)
-        self.mark_as_modified()
+        if file_path:
+            self.set_value(file_path)
+            self.mark_as_modified()
 
 
 class ArgumentDialog(QtWidgets.QDialog):
@@ -168,6 +184,11 @@ class ArgumentDialog(QtWidgets.QDialog):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
         self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), "icons", "argument_dialog_icon.png")))
+
+        stylesheet_path = os.path.join(os.path.dirname(__file__), "stylesheets", "darkblue.stylesheet")
+        if os.path.exists(stylesheet_path):
+            with open(stylesheet_path, "r") as fh:
+                self.setStyleSheet(fh.read())
 
         self.func = func
         self.empty_default_type = empty_default_type
@@ -179,30 +200,29 @@ class ArgumentDialog(QtWidgets.QDialog):
         top_text_L = QtWidgets.QLabel("Arguments for function: {}".format(self.func.__name__))
         self.main_layout.addWidget(top_text_L)
 
-        argument_scroll_area = QtWidgets.QScrollArea(self)
-        argument_scroll_area.setWidgetResizable(True)
-        scroll_widget = QtWidgets.QWidget()
-        self.arguments_layout = QtWidgets.QVBoxLayout(scroll_widget)
+        self.argument_TW = QtWidgets.QTreeWidget()
+        self.argument_TW.setColumnCount(2)
+        self.argument_TW.setHeaderLabels(("Argument", "Value"))
+        self.argument_TW.setColumnWidth(0, 200)
 
         self.generate_argument_widgets()
 
-        argument_scroll_area.setWidget(scroll_widget)
-        self.main_layout.addWidget(argument_scroll_area)
-
-        arg_spacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.MinimumExpanding)
-        self.main_layout.addItem(arg_spacer)
+        # argument_scroll_area.setWidget(scroll_widget)
+        self.main_layout.addWidget(self.argument_TW)
 
         self.func_preview_text_TE = QtWidgets.QTextEdit()
         self.func_preview_text_TE.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
         self.func_preview_text_TE.setWordWrapMode(QtGui.QTextOption.NoWrap)
         self.func_preview_text_TE.setReadOnly(True)
-        self.func_preview_text_TE.setStyleSheet("background-color:rgb(200, 200, 200)")
         self.main_layout.addWidget(self.func_preview_text_TE)
 
         self.run_BTN = QtWidgets.QPushButton("Run")
         self.run_BTN.setMinimumHeight(40)
         self.run_BTN.clicked.connect(self.run_func)
         self.main_layout.addWidget(self.run_BTN)
+
+        self.main_layout.setStretch(1, 25)  # give the TreeWidget some extra height
+        self.main_layout.setStretch(2, 10)
 
         self.setLayout(self.main_layout)
         self.resize(700, 500)
@@ -212,7 +232,7 @@ class ArgumentDialog(QtWidgets.QDialog):
         type_widgets = {
             'bool': BoolCheckBoxWidget,
             'str': StringLineEditWidget,
-            'int': DoubleSpinBoxWidget,
+            'int': IntegerSpinBoxWidget,
             'float': DoubleSpinBoxWidget,
             'path': StringFilePathWidget,
         }
@@ -251,6 +271,10 @@ class ArgumentDialog(QtWidgets.QDialog):
         sig = inspect.signature(self.func)
         for param in sig.parameters.values():  # type: inspect.Parameter
 
+            tree_widget_item = QtWidgets.QTreeWidgetItem()
+            tree_widget_item.setText(0, param.name)
+            self.argument_TW.addTopLevelItem(tree_widget_item)
+
             arg_layout = QtWidgets.QHBoxLayout()
             arg_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -283,7 +307,8 @@ class ArgumentDialog(QtWidgets.QDialog):
                 arg_widget_instance = arg_widget_cls(param.name, default_value,
                                                      is_required=not has_default_value)  # type:ArgumentWidget
                 arg_widget_instance.value_modified.connect(self.preview_func_call)
-                arg_layout.addWidget(arg_widget_instance)
+                # arg_layout.addWidget(arg_widget_instance)
+                self.argument_TW.setItemWidget(tree_widget_item, 1, arg_widget_instance)
 
                 param_tool_tip = param_tool_tips.get(param.name, "parameter un-documented")
                 arg_widget_instance.setToolTip(param_tool_tip)
@@ -291,9 +316,7 @@ class ArgumentDialog(QtWidgets.QDialog):
                 self.generated_arg_widgets.append(arg_widget_instance)
             else:
                 no_widget_label = QtWidgets.QLabel("No Widget Found for argument: {}".format(param_type.__name__))
-                arg_layout.addWidget(no_widget_label)
-
-            self.arguments_layout.addLayout(arg_layout)
+                self.argument_TW.setItemWidget(tree_widget_item, 1, no_widget_label)
 
     def get_modified_values(self):
         args = []
@@ -351,7 +374,7 @@ class ArgumentDialog(QtWidgets.QDialog):
 def test_function(file_name, file_path="",
                   transforms=False, shapes=False, attributes=False, connections=False,
                   user_attributes=False, keyable_attributes=False, locked_attributes=False,
-                  skip_attrs=None,
+                  skip_attrs=None, test_float=1.0, test_int=2,
                   kwarg1=True, testing_very_loooooooooooong_argument_name="Testing"):
     """
 
@@ -367,6 +390,8 @@ def test_function(file_name, file_path="",
     :param keyable_attributes:
     :param locked_attributes:
     :param skip_attrs:
+    :param test_float:
+    :param test_int:
     :param kwarg1:
     :param testing_very_loooooooooooong_argument_name:
     """
