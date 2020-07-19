@@ -7,21 +7,30 @@ from Qt import QtCore, QtWidgets, QtGui
 
 
 class ArgumentWidget(QtWidgets.QWidget):
+    """
+    Base class for argument widgets.
+    Functions are overloaded for each widget type
+    """
+
     value_modified = QtCore.Signal()
 
     def __init__(self, name, default_value, is_required=False, parent=None):
         super(ArgumentWidget, self).__init__(parent)
-        self.name = name
+
+        # class properties
+        self.arg_name = name
         self.default_value = default_value
         self.was_modified = False
         self.is_required = is_required
 
+        # UI
         self.main_layout = QtWidgets.QHBoxLayout()
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.argument_context_menu)
 
-        arg_widgets = self.build_widget()
+        arg_widgets = self.build_widget()  # return sub widgets so we can add the context menu to all of them
+
         if not isinstance(arg_widgets, (list, tuple)):
             arg_widgets = (arg_widgets,)
 
@@ -29,11 +38,11 @@ class ArgumentWidget(QtWidgets.QWidget):
             arg_widget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
             arg_widget.customContextMenuRequested.connect(self.argument_context_menu)
 
-        self.default_style = "background-color:rgb(120, 120, 120); color:white;"
+        self.default_style = "background-color:rgb(120, 120, 120); color:white;"  # grey with white text
         self.setStyleSheet(self.default_style)
 
         if is_required:
-            self.mark_as_required()  # has no real Default value, needs input from user.
+            self.mark_as_required()  # has no real Default value, needs input from user before the function can be run.
 
         self.setLayout(self.main_layout)
 
@@ -46,10 +55,21 @@ class ArgumentWidget(QtWidgets.QWidget):
         return ()
 
     def get_argument_value(self):
-        return
+        """
+        get value from QT widget
+        :return:
+        """
+        raise NotImplementedError(
+            "{} has not implemented '{}'".format(type(self).__name__, self.get_argument_value.__name__))
 
-    def set_value(self, val):
-        pass
+    def set_argument_value(self, val):
+        """
+        Set QT Widget state
+        :param val:
+        :return:
+        """
+        raise NotImplementedError(
+            "{} has not implemented '{}'".format(type(self).__name__, self.set_argument_value.__name__))
 
     def mark_as_required(self, has_value=False):
         if has_value:
@@ -58,12 +78,16 @@ class ArgumentWidget(QtWidgets.QWidget):
             self.setStyleSheet("background-color:rgb(250, 200, 100); color:black;")  # orange-ish tone
 
     def mark_as_modified(self):
+        """
+        Mark this widget so the tool knows to get the value as an argument
+        :return:
+        """
         self.was_modified = True
         self.value_modified.emit()
         self.setStyleSheet("background-color:rgb(100, 150, 100); color:white;")  # green-ish tone
 
     def set_value_to_default(self):
-        self.set_value(self.default_value)
+        self.set_argument_value(self.default_value)
         self.was_modified = False
         self.value_modified.emit()
         self.mark_as_required(has_value=not self.is_required)  # reset background-color
@@ -77,7 +101,7 @@ class BoolCheckBoxWidget(ArgumentWidget):
         self.check_box.stateChanged.connect(self.mark_as_modified)
         return self.check_box
 
-    def set_value(self, val):
+    def set_argument_value(self, val):
         self.check_box.setChecked(val)
 
     def get_argument_value(self):
@@ -99,7 +123,7 @@ class DoubleSpinBoxWidget(ArgumentWidget):
         spin.setDecimals(4)
         return spin
 
-    def set_value(self, val):
+    def set_argument_value(self, val):
         self.spin_box.setValue(val)
 
     def get_argument_value(self):
@@ -125,7 +149,7 @@ class StringTextEditWidget(ArgumentWidget):
         self.text_edit.setMinimumHeight(0)
         return self.text_edit
 
-    def set_value(self, val):
+    def set_argument_value(self, val):
         self.text_edit.setText(val)
 
     def get_argument_value(self):
@@ -152,7 +176,7 @@ class StringLineEditWidget(ArgumentWidget):
         self.line_edit.textEdited.connect(self.mark_as_modified)
         return self.line_edit
 
-    def set_value(self, val):
+    def set_argument_value(self, val):
         self.line_edit.setText(val)
 
     def get_argument_value(self):
@@ -175,12 +199,12 @@ class StringFilePathWidget(StringLineEditWidget):
     def browse_file_path(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Browse File")
         if file_path:
-            self.set_value(file_path)
+            self.set_argument_value(file_path)
             self.mark_as_modified()
 
 
 class ArgumentDialog(QtWidgets.QDialog):
-    def __init__(self, func, argument_widgets=None, empty_default_type=str, parent=None):
+    def __init__(self, func, argument_widgets=None, default_arg_type=str, parent=None):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
         self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), "icons", "argument_dialog_icon.png")))
@@ -190,11 +214,13 @@ class ArgumentDialog(QtWidgets.QDialog):
             with open(stylesheet_path, "r") as fh:
                 self.setStyleSheet(fh.read())
 
+        # Class properties
         self.func = func
-        self.empty_default_type = empty_default_type
+        self.default_arg_type = default_arg_type
         self.input_arg_widget_dict = argument_widgets if argument_widgets else {}
         self.generated_arg_widgets = []
 
+        # UI
         self.main_layout = QtWidgets.QVBoxLayout()
 
         top_text_L = QtWidgets.QLabel("Arguments for function: {}".format(self.func.__name__))
@@ -204,11 +230,9 @@ class ArgumentDialog(QtWidgets.QDialog):
         self.argument_TW.setColumnCount(2)
         self.argument_TW.setHeaderLabels(("Argument", "Value"))
         self.argument_TW.setColumnWidth(0, 200)
+        self.main_layout.addWidget(self.argument_TW)
 
         self.generate_argument_widgets()
-
-        # argument_scroll_area.setWidget(scroll_widget)
-        self.main_layout.addWidget(self.argument_TW)
 
         self.func_preview_text_TE = QtWidgets.QTextEdit()
         self.func_preview_text_TE.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
@@ -241,7 +265,7 @@ class ArgumentDialog(QtWidgets.QDialog):
         # get doc string as tooltip for the widget
         param_tool_tips = {}
         param_doc_string_types = {}
-        type_regex_pattern = re.compile('<(.*)>', re.IGNORECASE)
+        type_regex_pattern = re.compile('<(.*)>', re.IGNORECASE)  # get text between <> symbols
 
         func_doc_string = inspect.getdoc(self.func)  # god I love python sometimes
         if func_doc_string:
@@ -249,7 +273,7 @@ class ArgumentDialog(QtWidgets.QDialog):
                 try:
                     if ":param " not in doc_line:  # this is not very safe
                         continue
-                    param_doc_split = doc_line.lstrip(":param ").split(":")  # neither ís this, split arg name / arg doc
+                    param_doc_split = doc_line.lstrip(":param ").split(":")  # neither is this, split arg name / arg doc
                     if len(param_doc_split) == 1:
                         continue
                     if not param_doc_split[1]:  # if doc string is blank, don't add it to dict
@@ -264,7 +288,7 @@ class ArgumentDialog(QtWidgets.QDialog):
                         param_doc_string_types[param_doc_split[0]] = type_regex_search_result.group(1)
 
                 except Exception as e:
-                    print(e)
+                    print(e)  # Not a big deal if this fails. Parsing a doc string is tricky anyway.
 
         # ----------------------------------------------------------
         # iterate through function arguments
@@ -284,17 +308,20 @@ class ArgumentDialog(QtWidgets.QDialog):
             arg_layout.addWidget(arg_label)
 
             # ------------------------------------------------------------------------
+            # get default value and find matching widget for argument.
+
             default_value = param.default
             has_default_value = default_value != inspect.Parameter.empty
             if not has_default_value:
-                default_value = self.empty_default_type() if self.empty_default_type else None
+                default_value = self.default_arg_type() if self.default_arg_type else None
 
             param_type = type(default_value)
             arg_widget_cls = self.input_arg_widget_dict.get(param.name)  # QT Class can be specified in main() arguments
 
             if arg_widget_cls is None:
                 doc_string_type = param_doc_string_types.get(param.name)
-                if doc_string_type:  # Try to find matching QT Widget from doc string type
+                if doc_string_type:
+                    # Try to find matching QT Widget from doc string type
                     arg_widget_cls = type_widgets.get(doc_string_type)
 
             if arg_widget_cls is None:
@@ -305,15 +332,19 @@ class ArgumentDialog(QtWidgets.QDialog):
             if arg_widget_cls:
                 # Create QT Widget instance for this value type
                 arg_widget_instance = arg_widget_cls(param.name, default_value,
-                                                     is_required=not has_default_value)  # type:ArgumentWidget
+                                                     is_required=not has_default_value)  # type: ArgumentWidget
                 arg_widget_instance.value_modified.connect(self.preview_func_call)
-                # arg_layout.addWidget(arg_widget_instance)
+
+                # add to tree
                 self.argument_TW.setItemWidget(tree_widget_item, 1, arg_widget_instance)
 
+                # tool tip
                 param_tool_tip = param_tool_tips.get(param.name, "parameter un-documented")
                 arg_widget_instance.setToolTip(param_tool_tip)
 
+                # add to easy access list for the run function
                 self.generated_arg_widgets.append(arg_widget_instance)
+
             else:
                 no_widget_label = QtWidgets.QLabel("No Widget Found for argument: {}".format(param_type.__name__))
                 self.argument_TW.setItemWidget(tree_widget_item, 1, no_widget_label)
@@ -328,11 +359,15 @@ class ArgumentDialog(QtWidgets.QDialog):
             if widget.is_required:
                 args.append(widget.get_argument_value())
             else:
-                kwargs[widget.name] = widget.get_argument_value()
+                kwargs[widget.arg_name] = widget.get_argument_value()
 
         return args, kwargs
 
     def preview_func_call(self):
+        """
+        Build a string from modified arguments to fill the TextEdit preview.
+        :return:
+        """
         args, kwargs = self.get_modified_values()
         func_string = "{}(".format(self.func.__name__)
         empty_spaces = " " * len(func_string)
@@ -364,9 +399,14 @@ class ArgumentDialog(QtWidgets.QDialog):
             func_string += "\n{})".format(empty_spaces)
         else:
             func_string += ")"
+
         self.func_preview_text_TE.setText(func_string)
 
     def run_func(self):
+        """
+        Run the function with modified arguments.
+        :return:
+        """
         args, kwargs = self.get_modified_values()
         self.func(*args, **kwargs)
 
@@ -399,8 +439,16 @@ def test_function(file_name, file_path="",
     print(file_path)
 
 
-def main(func, argument_widgets=None, empty_default_type=str):
-    arg_dialog = ArgumentDialog(func, argument_widgets=argument_widgets, empty_default_type=empty_default_type)
+def main(func, argument_widgets=None, default_arg_type=str):
+    """
+    Create QT dialog for input function
+
+    :param func: function to create dialog around
+    :param argument_widgets: <dict> of {arg_name: WidgetClass} for when you want special widgets
+    :param default_arg_type: type for arguments with predefined types
+    :return:
+    """
+    arg_dialog = ArgumentDialog(func, argument_widgets=argument_widgets, default_arg_type=default_arg_type)
     arg_dialog.show()
     return arg_dialog
 
