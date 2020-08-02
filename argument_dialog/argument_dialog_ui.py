@@ -204,7 +204,7 @@ class StringFilePathWidget(StringLineEditWidget):
 
 
 class ArgumentDialog(QtWidgets.QDialog):
-    def __init__(self, func, argument_widgets=None, default_arg_type=str, parent=None):
+    def __init__(self, func, argument_widgets=None, default_arg_type=str, exec_btn_text="Run", parent=None):
         super(ArgumentDialog, self).__init__(parent)
         self.setWindowTitle("Argument Dialog")
         self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), "icons", "argument_dialog_icon.png")))
@@ -240,7 +240,7 @@ class ArgumentDialog(QtWidgets.QDialog):
         self.func_preview_text_TE.setReadOnly(True)
         self.main_layout.addWidget(self.func_preview_text_TE)
 
-        self.run_BTN = QtWidgets.QPushButton("Run")
+        self.run_BTN = QtWidgets.QPushButton(exec_btn_text)
         self.run_BTN.setMinimumHeight(40)
         self.run_BTN.clicked.connect(self.run_func)
         self.main_layout.addWidget(self.run_BTN)
@@ -439,16 +439,18 @@ def test_function(file_name, file_path="",
     print(file_path)
 
 
-def main(func, argument_widgets=None, default_arg_type=str):
+def main(func, argument_widgets=None, default_arg_type=str, exec_button_text="Run"):
     """
     Create QT dialog for input function
 
     :param func: function to create dialog around
     :param argument_widgets: <dict> of {arg_name: WidgetClass} for when you want special widgets
     :param default_arg_type: type for arguments with predefined types
+    :param exec_button_text: text on the button that executes the function
     :return:
     """
-    arg_dialog = ArgumentDialog(func, argument_widgets=argument_widgets, default_arg_type=default_arg_type)
+    arg_dialog = ArgumentDialog(func, argument_widgets=argument_widgets, default_arg_type=default_arg_type,
+                                exec_btn_text=exec_button_text)
     arg_dialog.show()
     return arg_dialog
 
