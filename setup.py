@@ -10,9 +10,12 @@ setup(name='argument-dialog',
       zip_safe=False,
 
       install_requires=[
-          "PySide2",
-          "Qt.py"
+          "Qt.py",
       ],
+      
+      extras_require = {
+        'standalone_use':  ["PySide2"],
+      }
 
       packages=find_packages(),
 
