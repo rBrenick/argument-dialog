@@ -15,7 +15,7 @@ setup(name='argument-dialog',
       
       extras_require = {
         'standalone_use':  ["PySide2"],
-      }
+      },
 
       packages=find_packages(),
 
