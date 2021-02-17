@@ -213,10 +213,16 @@ class StringFilePathWidget(StringLineEditWidget):
         return parent_widget, browse_file_button
 
     def browse_file_path(self):
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Browse File")
-        if file_path:
+        dialog = QtWidgets.QFileDialog(self)
+        dialog.setWindowTitle("Browse File")
+        dialog.setLabelText(dialog.Accept, "Choose Path")
+        dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
+
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            file_path = dialog.selectedFiles()[0]
             self.set_argument_value(file_path)
             self.mark_as_modified()
+
 
 
 def get_app_window():
